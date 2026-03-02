@@ -37,8 +37,10 @@ export const calculateTurnScore = (cards: Card[]): number => {
     if (card.type === 'number') {
       uniqueNumbers.add(card.value);
       score += card.value;
-    } else if (card.type === 'double') {
-      multiplier *= 2;
+    } else if (card.type === 'modifier-add') {
+      score += card.value;
+    } else if (card.type === 'modifier-mult') {
+      multiplier *= card.value;
     }
   });
 

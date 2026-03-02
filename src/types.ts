@@ -1,10 +1,10 @@
 
-export type CardType = 'number' | 'flip3' | 'second-chance' | 'double';
+export type CardType = 'number' | 'flip3' | 'second-chance' | 'freeze' | 'modifier-add' | 'modifier-mult';
 
 export interface Card {
   id: string;
   type: CardType;
-  value: number; // 0-12 for numbers, 0 for specials
+  value: number; // For numbers and add modifiers
   label: string;
 }
 

@@ -18,6 +18,8 @@ import { TARGET_SCORE, FLIP_7_BONUS } from './constants';
 
 const CardComponent = ({ card, isFlipped, isBusting }: { card: Card; isFlipped: boolean; isBusting?: boolean }) => {
   const getCardColor = (type: string, value: number) => {
+    if (type === 'freeze') return 'bg-cyan-600 text-white';
+    if (type === 'modifier-add' || type === 'modifier-mult') return 'bg-purple-600 text-white';
     if (type !== 'number') return 'bg-indigo-600 text-white';
     if (value === 0) return 'bg-slate-800 text-white';
     if (value === 7) return 'bg-amber-500 text-white';
@@ -35,14 +37,16 @@ const CardComponent = ({ card, isFlipped, isBusting }: { card: Card; isFlipped: 
     >
       <div className={`absolute inset-0 flex flex-col items-center justify-center p-4 text-center ${getCardColor(card.type, card.value)}`}>
         <span className="text-xs font-mono uppercase tracking-widest opacity-70 mb-2">
-          {card.type === 'number' ? 'Value' : 'Special'}
+          {card.type === 'number' ? 'Value' : card.type.includes('modifier') ? 'Modifier' : 'Action'}
         </span>
         <span className="text-3xl sm:text-4xl font-display font-bold">
           {card.label}
         </span>
         {card.type === 'flip3' && <span className="text-[10px] mt-2 leading-tight">Draw 3 more cards automatically</span>}
         {card.type === 'second-chance' && <span className="text-[10px] mt-2 leading-tight">Discard next duplicate</span>}
-        {card.type === 'double' && <span className="text-[10px] mt-2 leading-tight">Double points this turn</span>}
+        {card.type === 'freeze' && <span className="text-[10px] mt-2 leading-tight">Immediately bank points</span>}
+        {card.type === 'modifier-add' && <span className="text-[10px] mt-2 leading-tight">Add to pot</span>}
+        {card.type === 'modifier-mult' && <span className="text-[10px] mt-2 leading-tight">Multiply pot</span>}
       </div>
     </motion.div>
   );
@@ -134,7 +138,6 @@ export default function App() {
 
     setGameState(prev => {
       if (prev.deck.length === 0) {
-        // Reshuffle discard pile if deck is empty (simplified: just new deck)
         prev.deck = createDeck();
       }
 
@@ -148,12 +151,14 @@ export default function App() {
 
       if (isDuplicate) {
         if (prev.hasSecondChance) {
-          // Use second chance: remove the duplicate card and continue
           return {
             ...prev,
             deck: newDeck,
-            currentTurnCards: prev.currentTurnCards, // Don't add the duplicate
+            currentTurnCards: prev.currentTurnCards,
             hasSecondChance: false,
+            // Turn passes even on a saved duplicate? 
+            // Usually "after each flip" implies turn passes regardless of outcome
+            currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
           };
         } else {
           // BUST
@@ -164,6 +169,7 @@ export default function App() {
             status: 'busted',
             isFlip3Active: false,
             flip3Count: 0,
+            // Turn will pass via nextTurn() called from the Busted modal
           };
         }
       }
@@ -177,22 +183,8 @@ export default function App() {
         newHasSecondChance = true;
       }
 
-      if (drawnCard.type === 'flip3') {
-        newIsFlip3Active = true;
-        newFlip3Count = 3;
-      }
-
-      if (newIsFlip3Active) {
-        newFlip3Count--;
-        if (newFlip3Count <= 0) {
-          newIsFlip3Active = false;
-        }
-      }
-
-      // Check for Flip 7 (7 unique numbers)
-      const uniqueNumbers = new Set(newTurnCards.filter(c => c.type === 'number').map(c => c.value));
-      if (uniqueNumbers.size >= 7) {
-        // Auto-stay with bonus
+      if (drawnCard.type === 'freeze') {
+        // Freeze: Auto-stay for current player
         const turnScore = calculateTurnScore(newTurnCards);
         const updatedPlayers = prev.players.map((p, i) => 
           i === prev.currentPlayerIndex ? { ...p, score: p.score + turnScore } : p
@@ -211,6 +203,40 @@ export default function App() {
         };
       }
 
+      if (drawnCard.type === 'flip3') {
+        newIsFlip3Active = true;
+        newFlip3Count = 3;
+      }
+
+      if (newIsFlip3Active) {
+        newFlip3Count--;
+        if (newFlip3Count <= 0) {
+          newIsFlip3Active = false;
+        }
+      }
+
+      // Check for Flip 7 (7 unique numbers)
+      const uniqueNumbers = new Set(newTurnCards.filter(c => c.type === 'number').map(c => c.value));
+      if (uniqueNumbers.size >= 7) {
+        const turnScore = calculateTurnScore(newTurnCards);
+        const updatedPlayers = prev.players.map((p, i) => 
+          i === prev.currentPlayerIndex ? { ...p, score: p.score + turnScore } : p
+        );
+        const winner = checkWinCondition(updatedPlayers);
+        
+        return {
+          ...prev,
+          players: updatedPlayers,
+          deck: newDeck,
+          currentTurnCards: newTurnCards,
+          status: winner ? 'gameover' : 'stayed',
+          winner,
+          isFlip3Active: false,
+          flip3Count: 0,
+        };
+      }
+
+      // Standard successful flip: Pass turn to next player
       return {
         ...prev,
         deck: newDeck,
@@ -218,6 +244,7 @@ export default function App() {
         hasSecondChance: newHasSecondChance,
         isFlip3Active: newIsFlip3Active,
         flip3Count: newFlip3Count,
+        currentPlayerIndex: (prev.currentPlayerIndex + 1) % prev.players.length,
       };
     });
   }, [gameState.status, gameState.isFlip3Active, checkWinCondition]);
