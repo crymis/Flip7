@@ -1,0 +1,5 @@
+{
+  "name": "Flip 7",
+  "description": "A strategic push-your-luck card game. Flip unique cards to score points, but don't flip a duplicate or you'll bust! Features local hotseat multiplayer for 2-4 players.",
+  "requestFramePermissions": []
+}
